@@ -9,12 +9,12 @@
 <h1>OpenCvSharp on WebAssembly</h1>
 
 <div>
-<canvas @ref="srcCanvas" width="256" height="256" style="border:1px solid gray;">
-    Your browser does not support the HTML5 canvas tag.
-</canvas>
-<canvas @ref="dstCanvas" width="256" height="256" style="border:1px solid gray;">
-    Your browser does not support the HTML5 canvas tag.
-</canvas>
+    <canvas @ref="srcCanvas" width="680" height="680" style="border:1px solid gray;">
+        Your browser does not support the HTML5 canvas tag.
+    </canvas>
+    <canvas @ref="dstCanvas" width="680" height="680" style="border:1px solid gray;">
+        Your browser does not support the HTML5 canvas tag.
+    </canvas>
 </div>
 <div>
     <button @onclick="@(async () => await Grayscale())">Grayscale</button>
@@ -37,7 +37,7 @@
     }
 
     protected override async Task OnInitializedAsync()
-    {        
+    {
         await base.OnInitializedAsync();
     }
 
@@ -49,22 +49,28 @@
 
         var imageBytes = await httpClient.GetByteArrayAsync("sample-data/sample.bmp");
         srcMat ??= Mat.FromImageData(imageBytes);
-        var canvasWidth = 256;
-        var canvasHeight = 256;
-        if (srcMat.Width != canvasWidth || srcMat.Height != canvasHeight)
-        {
-            var tmpMat = new Mat();
-            Cv2.Resize(srcMat, tmpMat, new Size(), (double)canvasWidth / srcMat.Width, (double)canvasHeight / srcMat.Height);
-            srcMat.Dispose();
-            srcMat = tmpMat;
-        }
 
         srcCanvasClient ??= new CanvasClient(jsRuntime, srcCanvas);
         dstCanvasClient ??= new CanvasClient(jsRuntime, dstCanvas);
 
-        await srcCanvasClient.DrawMatAsync(srcMat);
+        await DrawMatAsync(srcMat, srcCanvasClient);
     }
-    
+    private async Task DrawMatAsync(Mat mat, CanvasClient target)
+    {
+        var canvasWidth = 680;
+        var canvasHeight = 680;
+        if (mat.Width != canvasWidth || mat.Height != canvasHeight)
+        {
+            using var tmpMat = new Mat();
+            Cv2.Resize(mat, tmpMat, new Size(), (double)canvasWidth / mat.Width, (double)canvasHeight / mat.Height);
+            await target.DrawMatAsync(tmpMat);
+        }
+        else
+        {
+            await target.DrawMatAsync(mat);
+        }
+    }
+
     private async Task Grayscale()
     {
         if (srcMat is null)
@@ -75,9 +81,9 @@
         using var grayMat = new Mat();
         Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
 
-        await dstCanvasClient.DrawMatAsync(grayMat);
+        await DrawMatAsync(grayMat, dstCanvasClient);
     }
-    
+
     private async Task PseudoColor()
     {
         if (srcMat is null)
@@ -90,9 +96,9 @@
         Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
         Cv2.ApplyColorMap(grayMat, dstMat, ColormapTypes.Jet);
 
-        await dstCanvasClient.DrawMatAsync(dstMat);
+        await DrawMatAsync(dstMat, dstCanvasClient);
     }
-    
+
     private async Task Threshold()
     {
         if (srcMat is null)
@@ -105,7 +111,7 @@
         Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
         Cv2.Threshold(grayMat, dstMat, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
 
-        await dstCanvasClient.DrawMatAsync(dstMat);
+        await DrawMatAsync(dstMat, dstCanvasClient);
     }
 
     private async Task Canny()
@@ -120,7 +126,7 @@
         Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
         Cv2.Canny(grayMat, dstMat, 32, 128);
 
-        await dstCanvasClient.DrawMatAsync(dstMat);
+        await DrawMatAsync(dstMat, dstCanvasClient);
     }
 
     private async Task Akaze()
@@ -140,6 +146,6 @@
         using var dstMat = srcMat.Clone();
         Cv2.DrawKeypoints(srcMat, keypoints, dstMat);
 
-        await dstCanvasClient.DrawMatAsync(dstMat);
+        await DrawMatAsync(dstMat, dstCanvasClient);
     }
 }
