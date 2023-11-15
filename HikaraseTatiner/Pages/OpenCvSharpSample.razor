@@ -1,4 +1,4 @@
-﻿@page "/opencvsharp_sample"
+@page "/opencvsharp_sample"
 @using OpenCvSharp
 @inject IJSRuntime jsRuntime;
 @inject HttpClient httpClient;
@@ -9,10 +9,10 @@
 <h1>OpenCvSharp on WebAssembly</h1>
 
 <div>
-    <canvas @ref="srcCanvas" width="680" height="680" style="border:1px solid gray;">
+    <canvas @ref="srcCanvas" width="@canvasWidth" height="@canvasHeight" style="border:1px solid gray;">
         Your browser does not support the HTML5 canvas tag.
     </canvas>
-    <canvas @ref="dstCanvas" width="680" height="680" style="border:1px solid gray;">
+    <canvas @ref="dstCanvas" width="@canvasWidth" height="@canvasHeight" style="border:1px solid gray;">
         Your browser does not support the HTML5 canvas tag.
     </canvas>
 </div>
@@ -25,6 +25,9 @@
 </div>
 
 @code {
+    private int canvasWidth = 680;
+    private int canvasHeight = 680;
+
     private Mat? srcMat;
     private ElementReference srcCanvas;
     private ElementReference dstCanvas;
@@ -57,8 +60,6 @@
     }
     private async Task DrawMatAsync(Mat mat, CanvasClient target)
     {
-        var canvasWidth = 680;
-        var canvasHeight = 680;
         if (mat.Width != canvasWidth || mat.Height != canvasHeight)
         {
             using var tmpMat = new Mat();
