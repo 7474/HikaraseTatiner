@@ -6,8 +6,10 @@ on:
     paths: 
       - .github/workflows/cd-pages.yml
       - HikaraseTatiner/**
-
   workflow_dispatch:
+  
+env:
+  PUBLISH_DIR: HikaraseTatiner/bin/Release/net8.0/publish/wwwroot
 
 permissions:
   contents: read
@@ -32,12 +34,15 @@ jobs:
           dotnet-version: '8.0.x'
       - run: dotnet workload install wasm-tools
       - run: dotnet publish -c Release HikaraseTatiner/HikaraseTatiner.csproj
+      - uses: SteveSandersonMS/ghaction-rewrite-base-href@v1
+        with:
+          html_path: ${{ env.PUBLISH_DIR }}/index.html
+          base_href: /HikaraseTatiner/
       
       - uses: actions/configure-pages@v3
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+      - uses: actions/upload-pages-artifact@v2
         with:
-          path: './HikaraseTatiner/bin/Release/net8.0/publish/'
-      - name: Deploy to GitHub Pages
+          path: ${{ env.PUBLISH_DIR }}
+      - uses: actions/deploy-pages@v2
         id: deployment
-        uses: actions/deploy-pages@v2
+        
