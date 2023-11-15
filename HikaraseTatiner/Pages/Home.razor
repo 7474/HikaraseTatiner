@@ -1,7 +1,174 @@
-﻿@page "/"
+@page "/"
+@using OpenCvSharp;
+@using SixLabors.ImageSharp;
+@inject IJSRuntime jsRuntime;
+@inject HttpClient httpClient;
+@implements IDisposable;
 
-<PageTitle>Home</PageTitle>
+<PageTitle>HikaraseTatiner Sample</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>HikaraseTatiner</h1>
 
-Welcome to your new app.
+<div>
+    <canvas @ref="srcCanvas" width="@canvasWidth" height="@canvasHeight" style="border:1px solid gray;">
+        Your browser does not support the HTML5 canvas tag.
+    </canvas>
+    <canvas @ref="dstCanvas" width="@canvasWidth" height="@canvasHeight" style="border:1px solid gray;">
+        Your browser does not support the HTML5 canvas tag.
+    </canvas>
+</div>
+<div>
+    <button @onclick="@(async () => await Grayscale())">Grayscale</button>
+    <button @onclick="@(async () => await PseudoColor())">PseudoColor</button>
+    <button @onclick="@(async () => await Threshold())" style="color: darkgray;">Threshold</button>
+    <button @onclick="@(async () => await Canny())" style="color: darkgray;">Canny</button>
+    <button @onclick="@(async () => await Akaze())" style="color: darkgray;">AKAZE</button>
+</div>
+<div>
+    <InputFile OnChange="OnInputFileChange" multiple />
+</div>
+
+@code {
+    private int canvasWidth = 512;
+    private int canvasHeight = 512;
+
+    private Mat? srcMat;
+    private ElementReference srcCanvas;
+    private ElementReference dstCanvas;
+    private CanvasClient? srcCanvasClient;
+    private CanvasClient? dstCanvasClient;
+
+    public void Dispose()
+    {
+        srcMat?.Dispose();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        srcCanvasClient ??= new CanvasClient(jsRuntime, srcCanvas);
+        dstCanvasClient ??= new CanvasClient(jsRuntime, dstCanvas);
+
+        if (srcMat == null) { return; }
+        await DrawMatAsync(srcMat, srcCanvasClient);
+    }
+
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        using var ins = file.OpenReadStream(1024 * 1024 * 10);
+        using var image = await Image.LoadAsync(ins);
+        System.Console.WriteLine($"image: {image.Width} x {image.Height}");
+
+        using var ms = new MemoryStream();
+        await image.SaveAsBmpAsync(ms);
+        System.Console.WriteLine($"ms: {ms.Length}");
+
+        var mat = Cv2.ImDecode(ms.ToArray(), ImreadModes.Unchanged);
+        System.Console.WriteLine($"mat: {mat.Width} x {mat.Height}");
+
+        srcMat?.Dispose();
+        srcMat = mat;
+
+        if (srcCanvasClient == null) { return; }
+        await DrawMatAsync(srcMat, srcCanvasClient);
+    }
+
+    private async Task DrawMatAsync(Mat mat, CanvasClient target)
+    {
+        if (mat.Width != canvasWidth || mat.Height != canvasHeight)
+        {
+            using var tmpMat = new Mat();
+            Cv2.Resize(mat, tmpMat, new OpenCvSharp.Size(), (double)canvasWidth / mat.Width, (double)canvasHeight / mat.Height);
+            await target.DrawMatAsync(tmpMat);
+        }
+        else
+        {
+            await target.DrawMatAsync(mat);
+        }
+    }
+
+    private async Task Grayscale()
+    {
+        if (srcMat is null)
+            throw new InvalidOperationException($"{nameof(srcMat)} is null");
+        if (dstCanvasClient is null)
+            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
+
+        using var grayMat = new Mat();
+        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
+
+        await DrawMatAsync(grayMat, dstCanvasClient);
+    }
+
+    private async Task PseudoColor()
+    {
+        if (srcMat is null)
+            throw new InvalidOperationException($"{nameof(srcMat)} is null");
+        if (dstCanvasClient is null)
+            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
+
+        using var grayMat = new Mat();
+        using var dstMat = new Mat();
+        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
+        Cv2.ApplyColorMap(grayMat, dstMat, ColormapTypes.Jet);
+
+        await DrawMatAsync(dstMat, dstCanvasClient);
+    }
+
+    private async Task Threshold()
+    {
+        if (srcMat is null)
+            throw new InvalidOperationException($"{nameof(srcMat)} is null");
+        if (dstCanvasClient is null)
+            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
+
+        using var grayMat = new Mat();
+        using var dstMat = new Mat();
+        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
+        Cv2.Threshold(grayMat, dstMat, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
+
+        await DrawMatAsync(dstMat, dstCanvasClient);
+    }
+
+    private async Task Canny()
+    {
+        if (srcMat is null)
+            throw new InvalidOperationException($"{nameof(srcMat)} is null");
+        if (dstCanvasClient is null)
+            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
+
+        using var grayMat = new Mat();
+        using var dstMat = new Mat();
+        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
+        Cv2.Canny(grayMat, dstMat, 32, 128);
+
+        await DrawMatAsync(dstMat, dstCanvasClient);
+    }
+
+    private async Task Akaze()
+    {
+        if (srcMat is null)
+            throw new InvalidOperationException($"{nameof(srcMat)} is null");
+        if (dstCanvasClient is null)
+            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
+
+        using var grayMat = new Mat();
+        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
+
+        using var akaze = AKAZE.Create();
+        using var descriptors = new Mat();
+        akaze.DetectAndCompute(grayMat, null, out var keypoints, descriptors);
+
+        using var dstMat = srcMat.Clone();
+        Cv2.DrawKeypoints(srcMat, keypoints, dstMat);
+
+        await DrawMatAsync(dstMat, dstCanvasClient);
+    }
+}
