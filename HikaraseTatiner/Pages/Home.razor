@@ -26,6 +26,7 @@
 </div>
 <div>
     <InputFile OnChange="OnInputFileChange" multiple />
+    <button @onclick="@(async () => await Save())">Save</button>
 </div>
 
 @code {
@@ -33,6 +34,7 @@
     private int canvasHeight = 512;
 
     private Mat? srcMat;
+    private Mat? dstMat;
     private ElementReference srcCanvas;
     private ElementReference dstCanvas;
     private CanvasClient? srcCanvasClient;
@@ -41,22 +43,22 @@
     public void Dispose()
     {
         srcMat?.Dispose();
+        dstMat?.Dispose();
     }
 
     protected override async Task OnInitializedAsync()
     {
+        System.Console.WriteLine($"OnInitializedAsync");
         await base.OnInitializedAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        System.Console.WriteLine($"OnAfterRenderAsync");
         await base.OnAfterRenderAsync(firstRender);
 
         srcCanvasClient ??= new CanvasClient(jsRuntime, srcCanvas);
         dstCanvasClient ??= new CanvasClient(jsRuntime, dstCanvas);
-
-        if (srcMat == null) { return; }
-        await DrawMatAsync(srcMat, srcCanvasClient);
     }
 
     private async Task OnInputFileChange(InputFileChangeEventArgs e)
@@ -80,8 +82,28 @@
         await DrawMatAsync(srcMat, srcCanvasClient);
     }
 
+    private async Task Save()
+    {
+        if (dstMat is null)
+            throw new InvalidOperationException($"{nameof(dstMat)} is null");
+
+        System.Console.WriteLine($"mat: {dstMat.Width} x {dstMat.Height}");
+        using var tmpMs = dstMat.ToMemoryStream(".bmp");
+        using var image = Image.Load(tmpMs);
+        System.Console.WriteLine($"image: {image.Width} x {image.Height}");
+
+        using var ms = new MemoryStream();
+        await image.SaveAsPngAsync(ms);
+        System.Console.WriteLine($"ms: {ms.Length}");
+
+        await jsRuntime.InvokeVoidAsync("downloadFile", $"hikarase-tainer-{DateTime.UtcNow.Ticks}.png", "image/png", ms.ToArray());
+    }
+
     private async Task DrawMatAsync(Mat mat, CanvasClient target)
     {
+        System.Console.WriteLine($"DrawMatAsync: {target.GetHashCode()}");
+        dstMat?.Dispose();
+        dstMat = mat.Clone();
         if (mat.Width != canvasWidth || mat.Height != canvasHeight)
         {
             using var tmpMat = new Mat();
