@@ -5,6 +5,11 @@
 OpenCV + Blazor WebAssembly でどうにかならないものか画策している。
 
 
+## デプロイ先
+
+https://7474.github.io/HikaraseTatiner/
+
+
 ## 参考
 
 - https://github.com/shimat/opencvsharp_blazor_sample
