@@ -1,6 +1,7 @@
 @page "/"
 @using OpenCvSharp;
 @using SixLabors.ImageSharp;
+@using System.Diagnostics
 @inject IJSRuntime jsRuntime;
 @inject HttpClient httpClient;
 @implements IDisposable;
@@ -28,10 +29,14 @@
     <InputFile OnChange="OnInputFileChange" multiple />
     <button @onclick="@(async () => await Save())">Save</button>
 </div>
+<div>
+    <pre>@log</pre>
+</div>
 
 @code {
     private int canvasWidth = 512;
     private int canvasHeight = 512;
+    private string log = "";
 
     private Mat? srcMat;
     private Mat? dstMat;
@@ -63,23 +68,38 @@
 
     private async Task OnInputFileChange(InputFileChangeEventArgs e)
     {
+        var sw = new Stopwatch();
+        sw.Start();
+
         var file = e.File;
         using var ins = file.OpenReadStream(1024 * 1024 * 10);
         using var image = await Image.LoadAsync(ins);
         System.Console.WriteLine($"image: {image.Width} x {image.Height}");
+        var lapLoad = sw.ElapsedMilliseconds;
 
         using var ms = new MemoryStream();
         await image.SaveAsBmpAsync(ms);
         System.Console.WriteLine($"ms: {ms.Length}");
+        var lapBuildBmp = sw.ElapsedMilliseconds;
 
         var mat = Cv2.ImDecode(ms.ToArray(), ImreadModes.Unchanged);
         System.Console.WriteLine($"mat: {mat.Width} x {mat.Height}");
+        var lapCopyToMat = sw.ElapsedMilliseconds;
 
         srcMat?.Dispose();
         srcMat = mat;
 
         if (srcCanvasClient == null) { return; }
         await DrawMatAsync(srcMat, srcCanvasClient);
+        var lapDrawCanvas = sw.ElapsedMilliseconds;
+
+        sw.Stop();
+        log = $@"Total: {sw.ElapsedMilliseconds}
+- Load: {lapLoad}
+- BuildBmp: {lapBuildBmp - lapLoad}
+- CopyToMat: {lapCopyToMat - lapBuildBmp}
+- DrawCanvas: {lapDrawCanvas - lapCopyToMat}
+";
     }
 
     private async Task Save()
@@ -87,16 +107,29 @@
         if (dstMat is null)
             throw new InvalidOperationException($"{nameof(dstMat)} is null");
 
+        var sw = new Stopwatch();
+        sw.Start();
+
         System.Console.WriteLine($"mat: {dstMat.Width} x {dstMat.Height}");
         using var tmpMs = dstMat.ToMemoryStream(".bmp");
         using var image = Image.Load(tmpMs);
         System.Console.WriteLine($"image: {image.Width} x {image.Height}");
+        var lapLoadBmp = sw.ElapsedMilliseconds;
 
         using var ms = new MemoryStream();
         await image.SaveAsPngAsync(ms);
         System.Console.WriteLine($"ms: {ms.Length}");
+        var lapEncodePng = sw.ElapsedMilliseconds;
 
         await jsRuntime.InvokeVoidAsync("downloadFile", $"hikarase-tainer-{DateTime.UtcNow.Ticks}.png", "image/png", ms.ToArray());
+        var lapInvokeJs = sw.ElapsedMilliseconds;
+
+        sw.Stop();
+        log = $@"total: {sw.ElapsedMilliseconds}
+- LoadBmp: {lapLoadBmp}
+- EncodePng: {lapEncodePng - lapLoadBmp}
+- InvokeJs: {lapInvokeJs - lapLoadBmp}
+";
     }
 
     private async Task DrawMatAsync(Mat mat, CanvasClient target)
