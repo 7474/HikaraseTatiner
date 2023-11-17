@@ -98,7 +98,8 @@
         var lapDrawCanvas = sw.ElapsedMilliseconds;
 
         sw.Stop();
-        log = $@"Total: {sw.ElapsedMilliseconds}
+        log = $@"Size: {mat.Width} x {mat.Height}
+Total: {sw.ElapsedMilliseconds}
 - Load: {lapLoad}
 - BuildBmp: {lapBuildBmp - lapLoad}
 - CopyToMat: {lapCopyToMat - lapBuildBmp}
@@ -133,7 +134,8 @@
         var lapInvokeJs = sw.ElapsedMilliseconds;
 
         sw.Stop();
-        log = $@"total: {sw.ElapsedMilliseconds}
+        log = $@"Size: {image.Width} x {image.Height}
+Total: {sw.ElapsedMilliseconds}
 - LoadBmp: {lapLoadBmp}
 - EncodePng: {lapEncodePng - lapLoadBmp}
 - InvokeJs: {lapInvokeJs - lapLoadBmp}
