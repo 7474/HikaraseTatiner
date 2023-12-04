@@ -30,6 +30,7 @@
 <div>
     <input type="color" @bind="hikaraseColor" />
     <button @onclick="@(async () => await Hikarase())" class="btn btn-primary">Hikarase</button>
+    <button @onclick="@(async () => await Niji())" class="btn btn-warning">Niji</button>
     <button @onclick="@(async () => await Save())" class="btn btn-success">Save</button>
 </div>
 <div>
@@ -164,15 +165,73 @@
 
     private async Task Hikarase()
     {
+        var hColor = ColorCodeToBGR(hikaraseColor);
+        System.Console.WriteLine(hColor);
+
+        await ApplyHikarase(hColor);
+    }
+
+    private static System.Timers.Timer? nijiTimer;
+    private double hue = 0d;
+
+    private async Task Niji()
+    {
+        if (nijiTimer == null)
+        {
+            nijiTimer = new System.Timers.Timer(100);
+            nijiTimer.Elapsed += NextNiji;
+            nijiTimer.Start();
+        }
+        else
+        {
+            nijiTimer.Stop();
+            nijiTimer.Dispose();
+            nijiTimer = null;
+        }
+    }
+
+    private void NextNiji(object? source, System.Timers.ElapsedEventArgs e)
+    {
+        hue = (hue + 16) % 256;
+        var hColor = HSVToBGR(hue);
+        System.Console.WriteLine(hColor);
+
+        ApplyHikarase(hColor).Wait();
+    }
+
+    public OpenCvSharp.Scalar HSVToBGR(double hue, double saturation = 1d, double value = 1d)
+    {
+        int hi = Convert.ToInt32(Math.Floor(hue / 60)) % 6;
+        double f = hue / 60 - Math.Floor(hue / 60);
+
+        value = value * 255;
+        int v = Convert.ToInt32(value);
+        int p = Convert.ToInt32(value * (1 - saturation));
+        int q = Convert.ToInt32(value * (1 - f * saturation));
+        int t = Convert.ToInt32(value * (1 - (1 - f) * saturation));
+
+        if (hi == 0)
+            return new OpenCvSharp.Scalar(p / 255d, t / 255d, v / 255d);
+        else if (hi == 1)
+            return new OpenCvSharp.Scalar(p / 255d, v / 255d, q / 255d);
+        else if (hi == 2)
+            return new OpenCvSharp.Scalar(t / 255d, v / 255d, p / 255d);
+        else if (hi == 3)
+            return new OpenCvSharp.Scalar(v / 255d, q / 255d, p / 255d);
+        else if (hi == 4)
+            return new OpenCvSharp.Scalar(v / 255d, p / 255d, t / 255d);
+        else
+            return new OpenCvSharp.Scalar(q / 255d, p / 255d, v / 255d);
+    }
+
+    private async Task ApplyHikarase(OpenCvSharp.Scalar hColor)
+    {
         if (srcMat is null)
             throw new InvalidOperationException($"{nameof(srcMat)} is null");
         if (outlineMat is null)
             throw new InvalidOperationException($"{nameof(outlineMat)} is null");
         if (dstCanvasClient is null)
             throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
-
-        var hColor = ColorCodeToBGR(hikaraseColor);
-        System.Console.WriteLine(hColor);
 
         var sw = new Stopwatch();
         sw.Start();
