@@ -6,31 +6,34 @@
 @inject HttpClient httpClient;
 @implements IDisposable;
 
-<PageTitle>HikaraseTatiner Sample</PageTitle>
+<PageTitle>HikaraseTatiner</PageTitle>
 
 <h1>HikaraseTatiner</h1>
-
 <div>
-    <canvas @ref="srcCanvas" width="@canvasWidth" height="@canvasHeight" style="max-width: 100%; border:1px solid gray;">
+    <canvas @ref="srcCanvas" width="@canvasWidth" height="@canvasHeight" style="max-width: 100%; border:1px solid gray; display: none;">
         Your browser does not support the HTML5 canvas tag.
     </canvas>
     <canvas @ref="dstCanvas" width="@canvasWidth" height="@canvasHeight" style="max-width: 100%; border:1px solid gray;">
         Your browser does not support the HTML5 canvas tag.
     </canvas>
 </div>
-<div>
-    <button @onclick="@(async () => await Grayscale())">Grayscale</button>
-    <button @onclick="@(async () => await PseudoColor())">PseudoColor</button>
-    <button @onclick="@(async () => await Threshold())" style="color: darkgray;">Threshold</button>
-    <button @onclick="@(async () => await Canny())" style="color: darkgray;">Canny</button>
-    <button @onclick="@(async () => await Akaze())" style="color: darkgray;">AKAZE</button>
+<div style="display: none;">
+    <button @onclick="@(async () => await Grayscale())" class="btn btn-primary">Grayscale</button>
+    <button @onclick="@(async () => await PseudoColor())" class="btn btn-primary">PseudoColor</button>
+    <button @onclick="@(async () => await Threshold())" class="btn btn-secondary">Threshold</button>
+    <button @onclick="@(async () => await Canny())" class="btn btn-secondary">Canny</button>
+    <button @onclick="@(async () => await Akaze())" class="btn btn-secondary">AKAZE</button>
 </div>
 <div>
-    <InputFile OnChange="OnInputFileChange" multiple />
-    <button @onclick="@(async () => await Save())">Save</button>
+    <InputFile OnChange="OnInputFileChange" class="form-control" />
 </div>
 <div>
-    <pre>@log</pre>
+    <input type="color" @bind="hikaraseColor" />
+    <button @onclick="@(async () => await Hikarase())" class="btn btn-primary">Hikarase</button>
+    <button @onclick="@(async () => await Save())" class="btn btn-success">Save</button>
+</div>
+<div>
+    <pre><code>@log</code></pre>
 </div>
 
 @code {
@@ -45,10 +48,15 @@
     private CanvasClient? srcCanvasClient;
     private CanvasClient? dstCanvasClient;
 
+    private Mat? outlineMat;
+    private string hikaraseColor;
+
     public void Dispose()
     {
         srcMat?.Dispose();
         dstMat?.Dispose();
+
+        outlineMat?.Dispose();
     }
 
     protected override async Task OnInitializedAsync()
@@ -95,16 +103,28 @@
 
         if (srcCanvasClient == null) { return; }
         await DrawMatAsync(srcMat, srcCanvasClient);
+        await DrawMatAsync(srcMat, dstCanvasClient);
         var lapDrawCanvas = sw.ElapsedMilliseconds;
+
+
+        using var tmpMat = new Mat();
+        using var grayMat = new Mat();
+        Cv2.Resize(mat, tmpMat, new OpenCvSharp.Size(), (double)canvasWidth / mat.Width, (double)canvasHeight / mat.Height);
+        Cv2.CvtColor(tmpMat, grayMat, ColorConversionCodes.BGR2GRAY);
+        Cv2.Canny(grayMat, tmpMat, 32, 128, 3, false);
+
+        outlineMat?.Dispose();
+        outlineMat = tmpMat.Clone();
+        // await DrawMatAsync(outlineMat, dstCanvasClient);
 
         sw.Stop();
         log = $@"Size: {mat.Width} x {mat.Height}
-Total: {sw.ElapsedMilliseconds}
-- Load: {lapLoad}
-- BuildBmp: {lapBuildBmp - lapLoad}
-- CopyToMat: {lapCopyToMat - lapBuildBmp}
-- DrawCanvas: {lapDrawCanvas - lapCopyToMat}
-";
+    Total: {sw.ElapsedMilliseconds}
+    - Load: {lapLoad}
+    - BuildBmp: {lapBuildBmp - lapLoad}
+    - CopyToMat: {lapCopyToMat - lapBuildBmp}
+    - DrawCanvas: {lapDrawCanvas - lapCopyToMat}
+    ";
     }
 
     private async Task Save()
@@ -135,11 +155,65 @@ Total: {sw.ElapsedMilliseconds}
 
         sw.Stop();
         log = $@"Size: {image.Width} x {image.Height}
-Total: {sw.ElapsedMilliseconds}
-- LoadBmp: {lapLoadBmp}
-- EncodePng: {lapEncodePng - lapLoadBmp}
-- InvokeJs: {lapInvokeJs - lapLoadBmp}
-";
+    Total: {sw.ElapsedMilliseconds}
+    - LoadBmp: {lapLoadBmp}
+    - EncodePng: {lapEncodePng - lapLoadBmp}
+    - InvokeJs: {lapInvokeJs - lapLoadBmp}
+    ";
+    }
+
+    private async Task Hikarase()
+    {
+        if (srcMat is null)
+            throw new InvalidOperationException($"{nameof(srcMat)} is null");
+        if (outlineMat is null)
+            throw new InvalidOperationException($"{nameof(outlineMat)} is null");
+        if (dstCanvasClient is null)
+            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
+
+        var hColor = ColorCodeToBGR(hikaraseColor);
+        System.Console.WriteLine(hColor);
+
+        var sw = new Stopwatch();
+        sw.Start();
+
+        using var tmpMat = new Mat();
+        using var tmpMat2 = new Mat();
+        using var tmpMat3 = new Mat();
+        Cv2.Resize(outlineMat, tmpMat, new OpenCvSharp.Size(), (double)srcMat.Width / outlineMat.Width, (double)srcMat.Height / outlineMat.Height);
+        System.Console.WriteLine($"Resize: {sw.Elapsed}");
+        Cv2.CvtColor(tmpMat, tmpMat2, ColorConversionCodes.GRAY2BGR);
+        System.Console.WriteLine($"CvtColor: {sw.Elapsed}");
+        Cv2.Multiply(tmpMat2, hColor, tmpMat3);
+        Cv2.Blur(tmpMat3, tmpMat2, new OpenCvSharp.Size(tmpMat2.Width / 256, tmpMat2.Height / 256));
+        Cv2.Blur(tmpMat2, tmpMat3, new OpenCvSharp.Size(tmpMat2.Width / 64, tmpMat2.Height / 64));
+
+        using var hikaraseMat = new Mat();
+        Cv2.AddWeighted(srcMat, 1d, tmpMat3, 0.5d, 0d, hikaraseMat);
+        Cv2.AddWeighted(hikaraseMat, 1d, tmpMat2, 0.75d, 0d, hikaraseMat);
+        System.Console.WriteLine($"AddWeighted: {sw.Elapsed}");
+
+        await DrawMatAsync(hikaraseMat, dstCanvasClient);
+        await DrawMatAsync(tmpMat2, srcCanvasClient);
+    }
+
+    private OpenCvSharp.Scalar ColorCodeToBGR(string htmlColor)
+    {
+        if (htmlColor.StartsWith("#"))
+        {
+            htmlColor = htmlColor.Substring(1);
+        }
+
+        if (htmlColor.Length == 3)
+        {
+            htmlColor = $"{htmlColor[0]}{htmlColor[0]}{htmlColor[1]}{htmlColor[1]}{htmlColor[2]}{htmlColor[2]}";
+        }
+
+        int r = int.Parse(htmlColor.Substring(0, 2), System.Globalization.NumberStyles.HexNumber);
+        int g = int.Parse(htmlColor.Substring(2, 2), System.Globalization.NumberStyles.HexNumber);
+        int b = int.Parse(htmlColor.Substring(4, 2), System.Globalization.NumberStyles.HexNumber);
+
+        return new OpenCvSharp.Scalar(b / 255d, g / 255d, r / 255d);
     }
 
     private async Task DrawMatAsync(Mat mat, CanvasClient target)
