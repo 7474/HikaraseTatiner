@@ -252,8 +252,8 @@
         Cv2.AddWeighted(hikaraseMat, 1d, tmpMat2, 0.75d, 0d, hikaraseMat);
         System.Console.WriteLine($"AddWeighted: {sw.Elapsed}");
 
+        // await DrawMatAsync(tmpMat2, srcCanvasClient);
         await DrawMatAsync(hikaraseMat, dstCanvasClient);
-        await DrawMatAsync(tmpMat2, srcCanvasClient);
     }
 
     private OpenCvSharp.Scalar ColorCodeToBGR(string htmlColor)
