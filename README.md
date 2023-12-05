@@ -2,7 +2,7 @@
 
 プラモの写真を光らせたい。という気持ちで生えたリポジトリ。
 
-OpenCV + Blazor WebAssembly でどうにかならないものか画策している。
+OpenCV + Blazor WebAssembly でどうにかならないものか画策していた。
 
 
 ## デプロイ先
