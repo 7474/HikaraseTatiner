@@ -17,21 +17,22 @@
         Your browser does not support the HTML5 canvas tag.
     </canvas>
 </div>
-<div style="display: none;">
-    <button @onclick="@(async () => await Grayscale())" class="btn btn-primary">Grayscale</button>
-    <button @onclick="@(async () => await PseudoColor())" class="btn btn-primary">PseudoColor</button>
-    <button @onclick="@(async () => await Threshold())" class="btn btn-secondary">Threshold</button>
-    <button @onclick="@(async () => await Canny())" class="btn btn-secondary">Canny</button>
-    <button @onclick="@(async () => await Akaze())" class="btn btn-secondary">AKAZE</button>
-</div>
 <div>
     <InputFile OnChange="OnInputFileChange" class="form-control" />
 </div>
-<div>
-    <input type="color" @bind="hikaraseColor" />
-    <button @onclick="@(async () => await Hikarase())" class="btn btn-primary">Hikarase</button>
-    <button @onclick="@(async () => await Niji())" class="btn btn-warning">Niji</button>
-    <button @onclick="@(async () => await Save())" class="btn btn-success">Save</button>
+<div class="row">
+    <div class="col-auto">
+        <input type="color" value="@hikaraseColor" @onchange="@(async (e) => await Hikarase(e.Value + ""))" class="form-control form-control-color" />
+    </div>
+    <div class="col-auto">
+        <button @onclick="@(() => PikaPika())" class="btn btn-primary">Hikarase</button>
+    </div>
+    <div class="col-auto">
+        <button @onclick="@(() => Niji())" class="btn btn-warning">Niji</button>
+    </div>
+    <div class="col-auto">
+        <button @onclick="@(async () => await Save())" class="btn btn-success">Download</button>
+    </div>
 </div>
 <div>
     <pre><code>@log</code></pre>
@@ -103,14 +104,18 @@
         srcMat = mat;
 
         if (srcCanvasClient == null) { return; }
+        if (dstCanvasClient == null) { return; }
+
+        var size = ToCanvasSize(mat);
+        srcCanvasClient.Resize(size.Width, size.Height);
+        dstCanvasClient.Resize(size.Width, size.Height);
         await DrawMatAsync(srcMat, srcCanvasClient);
         await DrawMatAsync(srcMat, dstCanvasClient);
         var lapDrawCanvas = sw.ElapsedMilliseconds;
 
-
         using var tmpMat = new Mat();
         using var grayMat = new Mat();
-        Cv2.Resize(mat, tmpMat, new OpenCvSharp.Size(), (double)canvasWidth / mat.Width, (double)canvasHeight / mat.Height);
+        Cv2.Resize(mat, tmpMat, new OpenCvSharp.Size(), (double)size.Width / mat.Width, (double)size.Height / mat.Height);
         Cv2.CvtColor(tmpMat, grayMat, ColorConversionCodes.BGR2GRAY);
         Cv2.Canny(grayMat, tmpMat, 32, 128, 3, false);
 
@@ -163,65 +168,59 @@
     ";
     }
 
-    private async Task Hikarase()
+    private async Task Hikarase(string newColor)
     {
+        hikaraseColor = newColor;
+
         var hColor = ColorCodeToBGR(hikaraseColor);
         System.Console.WriteLine(hColor);
 
         await ApplyHikarase(hColor);
     }
 
-    private static System.Timers.Timer? nijiTimer;
-    private double hue = 0d;
+    private static System.Timers.Timer? hikaraseTimer;
 
-    private async Task Niji()
+    private void PikaPika()
     {
-        if (nijiTimer == null)
-        {
-            nijiTimer = new System.Timers.Timer(100);
-            nijiTimer.Elapsed += NextNiji;
-            nijiTimer.Start();
-        }
-        else
-        {
-            nijiTimer.Stop();
-            nijiTimer.Dispose();
-            nijiTimer = null;
-        }
+        ToggleTimer(NextPikaPika);
+    }
+    private double a = 255d;
+    private Random ar = new Random();
+    private void NextPikaPika(object? source, System.Timers.ElapsedEventArgs e)
+    {
+        a = Math.Max(Math.Min(a + (ar.NextDouble() * 64 - 32), 255d), 128d);
+
+        ApplyHikarase(ApplyAlpha(ColorCodeToBGR(hikaraseColor), a / 255)).Wait();
     }
 
+    private void Niji()
+    {
+        ToggleTimer(NextNiji);
+    }
+    private double hue = 0d;
     private void NextNiji(object? source, System.Timers.ElapsedEventArgs e)
     {
-        hue = (hue + 16) % 256;
+        hue = (hue + 32) % 256;
         var hColor = HSVToBGR(hue);
         System.Console.WriteLine(hColor);
 
         ApplyHikarase(hColor).Wait();
     }
 
-    public OpenCvSharp.Scalar HSVToBGR(double hue, double saturation = 1d, double value = 1d)
+    private void ToggleTimer(System.Timers.ElapsedEventHandler handler)
     {
-        int hi = Convert.ToInt32(Math.Floor(hue / 60)) % 6;
-        double f = hue / 60 - Math.Floor(hue / 60);
-
-        value = value * 255;
-        int v = Convert.ToInt32(value);
-        int p = Convert.ToInt32(value * (1 - saturation));
-        int q = Convert.ToInt32(value * (1 - f * saturation));
-        int t = Convert.ToInt32(value * (1 - (1 - f) * saturation));
-
-        if (hi == 0)
-            return new OpenCvSharp.Scalar(p / 255d, t / 255d, v / 255d);
-        else if (hi == 1)
-            return new OpenCvSharp.Scalar(p / 255d, v / 255d, q / 255d);
-        else if (hi == 2)
-            return new OpenCvSharp.Scalar(t / 255d, v / 255d, p / 255d);
-        else if (hi == 3)
-            return new OpenCvSharp.Scalar(v / 255d, q / 255d, p / 255d);
-        else if (hi == 4)
-            return new OpenCvSharp.Scalar(v / 255d, p / 255d, t / 255d);
+        if (hikaraseTimer == null)
+        {
+            hikaraseTimer = new System.Timers.Timer(1000 / 24);
+            hikaraseTimer.Elapsed += handler;
+            hikaraseTimer.Start();
+        }
         else
-            return new OpenCvSharp.Scalar(q / 255d, p / 255d, v / 255d);
+        {
+            hikaraseTimer.Stop();
+            hikaraseTimer.Dispose();
+            hikaraseTimer = null;
+        }
     }
 
     private async Task ApplyHikarase(OpenCvSharp.Scalar hColor)
@@ -256,6 +255,49 @@
         await DrawMatAsync(hikaraseMat, dstCanvasClient);
     }
 
+    private async Task DrawMatAsync(Mat mat, CanvasClient target)
+    {
+        System.Console.WriteLine($"DrawMatAsync: {target.GetHashCode()}");
+        dstMat?.Dispose();
+        dstMat = mat.Clone();
+        var size = ToCanvasSize(mat);
+        if (mat.Width != size.Width || mat.Height != size.Height)
+        {
+            using var tmpMat = new Mat();
+            Cv2.Resize(mat, tmpMat, new OpenCvSharp.Size(), (double)size.Width / mat.Width, (double)size.Height / mat.Height);
+            await target.DrawMatAsync(tmpMat);
+        }
+        else
+        {
+            await target.DrawMatAsync(mat);
+        }
+    }
+
+    private OpenCvSharp.Scalar HSVToBGR(double hue, double saturation = 1d, double value = 1d)
+    {
+        int hi = Convert.ToInt32(Math.Floor(hue / 60)) % 6;
+        double f = hue / 60 - Math.Floor(hue / 60);
+
+        value = value * 255;
+        int v = Convert.ToInt32(value);
+        int p = Convert.ToInt32(value * (1 - saturation));
+        int q = Convert.ToInt32(value * (1 - f * saturation));
+        int t = Convert.ToInt32(value * (1 - (1 - f) * saturation));
+
+        if (hi == 0)
+            return new OpenCvSharp.Scalar(p / 255d, t / 255d, v / 255d);
+        else if (hi == 1)
+            return new OpenCvSharp.Scalar(p / 255d, v / 255d, q / 255d);
+        else if (hi == 2)
+            return new OpenCvSharp.Scalar(t / 255d, v / 255d, p / 255d);
+        else if (hi == 3)
+            return new OpenCvSharp.Scalar(v / 255d, q / 255d, p / 255d);
+        else if (hi == 4)
+            return new OpenCvSharp.Scalar(v / 255d, p / 255d, t / 255d);
+        else
+            return new OpenCvSharp.Scalar(q / 255d, p / 255d, v / 255d);
+    }
+
     private OpenCvSharp.Scalar ColorCodeToBGR(string htmlColor)
     {
         if (htmlColor.StartsWith("#"))
@@ -275,98 +317,18 @@
         return new OpenCvSharp.Scalar(b / 255d, g / 255d, r / 255d);
     }
 
-    private async Task DrawMatAsync(Mat mat, CanvasClient target)
+    private OpenCvSharp.Scalar ApplyAlpha(OpenCvSharp.Scalar color, double alpha)
     {
-        System.Console.WriteLine($"DrawMatAsync: {target.GetHashCode()}");
-        dstMat?.Dispose();
-        dstMat = mat.Clone();
-        if (mat.Width != canvasWidth || mat.Height != canvasHeight)
-        {
-            using var tmpMat = new Mat();
-            Cv2.Resize(mat, tmpMat, new OpenCvSharp.Size(), (double)canvasWidth / mat.Width, (double)canvasHeight / mat.Height);
-            await target.DrawMatAsync(tmpMat);
-        }
-        else
-        {
-            await target.DrawMatAsync(mat);
-        }
+        return new OpenCvSharp.Scalar(color.Val0 * alpha, color.Val1 * alpha, color.Val2 * alpha);
     }
 
-    private async Task Grayscale()
+    private SixLabors.ImageSharp.Size ToCanvasSize(Mat mat)
     {
-        if (srcMat is null)
-            throw new InvalidOperationException($"{nameof(srcMat)} is null");
-        if (dstCanvasClient is null)
-            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
-
-        using var grayMat = new Mat();
-        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
-
-        await DrawMatAsync(grayMat, dstCanvasClient);
-    }
-
-    private async Task PseudoColor()
-    {
-        if (srcMat is null)
-            throw new InvalidOperationException($"{nameof(srcMat)} is null");
-        if (dstCanvasClient is null)
-            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
-
-        using var grayMat = new Mat();
-        using var dstMat = new Mat();
-        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
-        Cv2.ApplyColorMap(grayMat, dstMat, ColormapTypes.Jet);
-
-        await DrawMatAsync(dstMat, dstCanvasClient);
-    }
-
-    private async Task Threshold()
-    {
-        if (srcMat is null)
-            throw new InvalidOperationException($"{nameof(srcMat)} is null");
-        if (dstCanvasClient is null)
-            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
-
-        using var grayMat = new Mat();
-        using var dstMat = new Mat();
-        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
-        Cv2.Threshold(grayMat, dstMat, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
-
-        await DrawMatAsync(dstMat, dstCanvasClient);
-    }
-
-    private async Task Canny()
-    {
-        if (srcMat is null)
-            throw new InvalidOperationException($"{nameof(srcMat)} is null");
-        if (dstCanvasClient is null)
-            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
-
-        using var grayMat = new Mat();
-        using var dstMat = new Mat();
-        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
-        Cv2.Canny(grayMat, dstMat, 32, 128);
-
-        await DrawMatAsync(dstMat, dstCanvasClient);
-    }
-
-    private async Task Akaze()
-    {
-        if (srcMat is null)
-            throw new InvalidOperationException($"{nameof(srcMat)} is null");
-        if (dstCanvasClient is null)
-            throw new InvalidOperationException($"{nameof(dstCanvasClient)} is null");
-
-        using var grayMat = new Mat();
-        Cv2.CvtColor(srcMat, grayMat, ColorConversionCodes.BGR2GRAY);
-
-        using var akaze = AKAZE.Create();
-        using var descriptors = new Mat();
-        akaze.DetectAndCompute(grayMat, null, out var keypoints, descriptors);
-
-        using var dstMat = srcMat.Clone();
-        Cv2.DrawKeypoints(srcMat, keypoints, dstMat);
-
-        await DrawMatAsync(dstMat, dstCanvasClient);
+        var tate = mat.Height > mat.Width;
+        var ratio = tate ? (double)mat.Width / mat.Height : (double)mat.Height / mat.Width;
+        return new SixLabors.ImageSharp.Size(
+            (int)(tate ? canvasWidth * ratio : canvasWidth),
+            (int)(tate ? canvasHeight : canvasHeight * ratio)
+        );
     }
 }

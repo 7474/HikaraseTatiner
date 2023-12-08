@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using OpenCvSharp;
 using System.Runtime.InteropServices;
@@ -49,6 +49,11 @@ namespace HikaraseTatiner
             {
                 rgba?.Dispose();
             }
+        }
+
+        public void Resize(int width, int height)
+        {
+            jsRuntime.InvokeVoidAsync("resizeCanvas", canvasElement, width, height);
         }
     }
 }
