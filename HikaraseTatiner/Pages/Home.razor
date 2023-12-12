@@ -185,12 +185,14 @@
         ToggleTimer(NextPikaPika);
     }
     private double a = 255d;
+    private double s = 1d;
     private Random ar = new Random();
     private void NextPikaPika(object? source, System.Timers.ElapsedEventArgs e)
     {
         a = Math.Max(Math.Min(a + (ar.NextDouble() * 64 - 32), 255d), 128d);
+        s = ar.NextDouble() * 3 + 0.5;
 
-        ApplyHikarase(ApplyAlpha(ColorCodeToBGR(hikaraseColor), a / 255)).Wait();
+        ApplyHikarase(ApplyAlpha(ColorCodeToBGR(hikaraseColor), a / 255), s).Wait();
     }
 
     private void Niji()
@@ -223,7 +225,7 @@
         }
     }
 
-    private async Task ApplyHikarase(OpenCvSharp.Scalar hColor)
+    private async Task ApplyHikarase(OpenCvSharp.Scalar hColor, double blurSize = 1d)
     {
         if (srcMat is null)
             throw new InvalidOperationException($"{nameof(srcMat)} is null");
@@ -243,8 +245,8 @@
         Cv2.CvtColor(tmpMat, tmpMat2, ColorConversionCodes.GRAY2BGR);
         System.Console.WriteLine($"CvtColor: {sw.Elapsed}");
         Cv2.Multiply(tmpMat2, hColor, tmpMat3);
-        Cv2.Blur(tmpMat3, tmpMat2, new OpenCvSharp.Size(tmpMat2.Width / 256, tmpMat2.Height / 256));
-        Cv2.Blur(tmpMat2, tmpMat3, new OpenCvSharp.Size(tmpMat2.Width / 64, tmpMat2.Height / 64));
+        Cv2.Blur(tmpMat3, tmpMat2, new OpenCvSharp.Size(tmpMat2.Width / 256 * blurSize, tmpMat2.Height / 256 * blurSize));
+        Cv2.Blur(tmpMat2, tmpMat3, new OpenCvSharp.Size(tmpMat2.Width / 64 * blurSize, tmpMat2.Height / 64 * blurSize));
 
         using var hikaraseMat = new Mat();
         Cv2.AddWeighted(srcMat, 1d, tmpMat3, 0.5d, 0d, hikaraseMat);
