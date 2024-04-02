@@ -39,7 +39,7 @@ jobs:
           html_path: ${{ env.PUBLISH_DIR }}/index.html
           base_href: /HikaraseTatiner/
       
-      - uses: actions/configure-pages@v4
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ env.PUBLISH_DIR }}
